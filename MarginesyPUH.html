@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dodawanie marginesów do PDF</title>
+  <style>
+    :root {
+      --bg: #f4f7f2; --panel: #ffffff; --ink: #1e2a1f; --muted: #5a6b5a;
+      --accent: #2f7a48; --accent-2: #c5e0cd; --border: #d5e3d5;
+      --warn: #8f5f00; --ok: #1f6e3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", Tahoma, Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 10%, #e6f2e8 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, #e9f5ee 0%, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .wrap  { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+    .card  { background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+             box-shadow: 0 10px 30px rgba(25,60,35,.08); overflow: hidden; }
+    .head  { padding: 20px 24px; border-bottom: 1px solid var(--border);
+             background: linear-gradient(135deg, #f0f8f3 0%, #ffffff 75%); }
+    h1     { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: .2px; }
+    .sub   { margin: 0; color: var(--muted); font-size: .95rem; }
+    .body  { padding: 22px 24px; display: grid; gap: 14px; }
+    .row   { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    input[type="file"] { border: 1px solid var(--border); border-radius: 10px;
+                         padding: 8px; background: #fff; max-width: 100%; }
+    button { border: 1px solid #26663d; background: var(--accent); color: #fff;
+             border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .hint  { color: var(--muted); font-size: .9rem; }
+    .status { border: 1px dashed var(--border); background: #fbfefb; border-radius: 10px;
+              padding: 10px; font-size: .92rem; white-space: pre-wrap; }
+    .status.ok  { color: var(--ok);   border-color: var(--accent-2); background: #f3fbf6; }
+    .status.err { color: var(--warn); border-color: #f0d090;         background: #fffaf0; }
+    .results { margin-top: 4px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .results table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    .results th, .results td { text-align: left; padding: 10px 12px;
+                                border-bottom: 1px solid var(--border); vertical-align: top; }
+    .results tr:last-child td { border-bottom: 0; }
+    .pill  { display: inline-block; border: 1px solid var(--accent-2); background: #f3fbf6;
+             color: var(--ok); border-radius: 999px; padding: 3px 8px;
+             font-size: .78rem; font-weight: 600; }
+    .small { font-size: .82rem; color: var(--muted); }
+    .footer { padding: 12px 24px 18px; color: var(--muted); font-size: .83rem;
+              border-top: 1px solid var(--border); background: #fcfffc; }
+    .footer a { color: var(--accent); }
+    @media (max-width: 640px) {
+      .head, .body, .footer { padding-left: 14px; padding-right: 14px; }
+      h1 { font-size: 1.1rem; }
+    }
+  </style>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="head">
+      <h1>Dodawanie marginesów do zeskanowanego pliku PDF</h1>
+      <p class="sub">Narzędzie działa w przeglądarce — plik nie jest wysyłany na serwer.</p>
+    </div>
+    <div class="body">
+      <p style="margin:0;font-size:.95rem;">
+        PDF przesyłany w PUH wymaga pustych marginesów 1.5&nbsp;cm.
+        Zeskanowane pliki nie spełniają tego warunku i są odrzucane.
+        Narzędzie normalizuje orientację, boxy strony i dodaje marginesy.
+      </p>
+      <div class="row">
+        <input id="fileInput" type="file" accept="application/pdf,.pdf">
+        <button id="processBtn" disabled>Przetwórz</button>
+      </div>
+      <div class="hint">Przetwarzanie odbywa się lokalnie — plik nie opuszcza przeglądarki.</div>
+      <div id="status" class="status">Wybierz plik, aby rozpocząć.</div>
+      <div id="results" class="results" hidden></div>
+    </div>
+    <div class="footer">
+      Operacja: normalizacja obrotu → skalowanie ×&nbsp;0.8571 → fit A4 → MediaBox = TrimBox = [0 0 595 841].
+      Oparty na <a href="https://pdf-lib.js.org" target="_blank">pdf-lib</a>.
+    </div>
+  </div>
+</div>
+
+<script>
+  const SCALE = 0.8571;
+  const A4_W  = 595.28;
+  const A4_H  = 841.89;
+
+  const fileInput  = document.getElementById('fileInput');
+  const processBtn = document.getElementById('processBtn');
+  const statusEl   = document.getElementById('status');
+  const resultsEl  = document.getElementById('results');
+
+  const state = { result: null };
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function setStatus(msg, type = '') {
+    statusEl.textContent = msg;
+    statusEl.className   = 'status' + (type ? ' ' + type : '');
+  }
+
+  function triggerDownload(blob, filename) {
+    const url  = URL.createObjectURL(blob);
+    const link = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  function renderResults() {
+    if (!state.result) { resultsEl.hidden = true; resultsEl.innerHTML = ''; return; }
+
+    const { blob, filename, pages, size, rotFixed } = state.result;
+    const pageLabel  = pages === 1 ? '1 strona' : `${pages} stron`;
+    const marginMM   = (A4_W * (1 - SCALE) / 2 / (72 / 25.4)).toFixed(1);
+    const rotNote    = rotFixed ? `<div class="small">obrót znormalizowany: ${rotFixed}</div>` : '';
+
+    resultsEl.hidden  = false;
+    resultsEl.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Strony</th><th>Plik wyjściowy</th><th>Operacje</th><th>Akcja</th>
+        </tr></thead>
+        <tbody><tr>
+          <td><span class="pill">${escapeHtml(pageLabel)}</span></td>
+          <td>
+            <code>${escapeHtml(filename)}</code>
+            <div class="small">${size.toLocaleString('pl-PL')} bajtów · A4 portrait</div>
+          </td>
+          <td>
+            Marginesy ${escapeHtml(marginMM)}&nbsp;mm
+            <div class="small">MediaBox = TrimBox = [0 0 595 842]</div>
+            ${rotNote}
+          </td>
+          <td><button class="dl-btn">Pobierz</button></td>
+        </tr></tbody>
+      </table>`;
+
+    resultsEl.querySelector('.dl-btn')
+      .addEventListener('click', () => triggerDownload(blob, filename));
+  }
+
+  // ── Bake the /Rotate flag into the content stream CTM, then clear it ──────
+  function normalizeRotation(page) {
+    const { PDFOperator, PDFNumber, degrees } = PDFLib;
+    const rot = page.getRotation().angle; // 0 | 90 | 180 | 270
+    if (rot === 0) return false;
+
+    const { width: W, height: H } = page.getSize();
+
+    // Rotation matrices: (x_new, y_new) = CTM * (x_old, y_old)
+    // PDF CTM [a b c d e f]: x' = a·x + c·y + e,  y' = b·x + d·y + f
+    const matrices = {
+       90: [ 0,  1, -1,  0,  H,  0],  // 90° CCW viewer  → bake 90° CW
+      180: [-1,  0,  0, -1,  W,  H],  // 180° viewer     → bake 180°
+      270: [ 0, -1,  1,  0,  0,  W],  // 270° CCW viewer → bake 270° CW
+    };
+    const m = matrices[rot];
+    if (!m) return false;
+
+    const op = PDFOperator.of('cm', m.map(v => PDFNumber.of(v)));
+    page.node.wrapContentStream(op);
+    page.setRotation(degrees(0));
+
+    // For 90/270 the visual dimensions are swapped — update MediaBox accordingly
+    if (rot === 90 || rot === 270) page.setSize(H, W);
+
+    return rot;
+  }
+
+  // ── Ensure all page boxes are consistent A4 rectangles ────────────────────
+  function normalizeBoxes(page) {
+    const { PDFName } = PDFLib;
+    // Explicit setter for TrimBox (public pdf-lib API)
+    page.setTrimBox(0, 0, A4_W, A4_H);
+    // Remove boxes that might carry stale dimensions from the original scan
+    page.node.delete(PDFName.of('CropBox'));
+    page.node.delete(PDFName.of('BleedBox'));
+    page.node.delete(PDFName.of('ArtBox'));
+  }
+
+  // ── Wire up UI ─────────────────────────────────────────────────────────────
+  fileInput.addEventListener('change', () => {
+    const has = !!fileInput.files.length;
+    processBtn.disabled = !has;
+    state.result = null;
+    renderResults();
+    setStatus(has ? 'Plik wybrany: ' + fileInput.files[0].name
+                  : 'Wybierz plik, aby rozpocząć.');
+  });
+
+  processBtn.addEventListener('click', async () => {
+    if (!fileInput.files.length) return;
+    processBtn.disabled = true;
+    state.result = null;
+    renderResults();
+    setStatus('Przetwarzanie…');
+
+    try {
+      const file   = fileInput.files[0];
+      const bytes  = await file.arrayBuffer();
+      const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+      const pages  = pdfDoc.getPages();
+      const rotations = [];
+
+      for (const page of pages) {
+        // Step 1: bake /Rotate into content stream
+        const rotFixed = normalizeRotation(page);
+        if (rotFixed) rotations.push(rotFixed);
+
+        // Step 2: combined scale-contents + scale-to-fit A4
+        const { width: W, height: H } = page.getSize();
+        const fitScale = Math.min(A4_W / W, A4_H / H);
+        const sFinal   = fitScale * SCALE;
+        const txFinal  = fitScale * (W * (1 - SCALE) / 2) + (A4_W - W * fitScale) / 2;
+        const tyFinal  = fitScale * (H * (1 - SCALE) / 2) + (A4_H - H * fitScale) / 2;
+
+        page.scaleContent(sFinal, sFinal);   // prepended 1st → applied 2nd
+        page.translateContent(txFinal, tyFinal); // prepended 2nd → applied 1st
+
+        // Step 3: set MediaBox to A4 (setSize also updates equal-sized boxes)
+        page.setSize(A4_W, A4_H);
+
+        // Step 4: explicitly normalize all remaining boxes
+        normalizeBoxes(page);
+      }
+
+      const outBytes = await pdfDoc.save();
+      const blob     = new Blob([outBytes], { type: 'application/pdf' });
+      const filename = file.name.replace(/\.pdf$/i, '') + '_margins.pdf';
+      const rotLabel = rotations.length
+        ? [...new Set(rotations)].map(r => r + '°').join(', ')
+        : null;
+
+      state.result = { blob, filename, pages: pages.length,
+                       size: outBytes.byteLength, rotFixed: rotLabel };
+      renderResults();
+      setStatus(`✓ Przetworzono ${pages.length} stron${pages.length === 1 ? 'ę' : 'y'}.`, 'ok');
+    } catch (err) {
+      setStatus('Błąd: ' + err.message, 'err');
+      console.error(err);
+    } finally {
+      processBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
