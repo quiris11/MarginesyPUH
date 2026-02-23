@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none';
-           script-src 'sha256-UF92WaavhqXFAfH7Nz1mJTw4HJx+PeCtfBSoBVuBPcE=' https://unpkg.com;
+           script-src 'sha256-Q3lN6uoooBhpmLgwnLPDbJbw+3euHVhPS0BMfGW5ZBY=' https://unpkg.com;
            style-src 'unsafe-inline';
            connect-src https://unpkg.com;  
            worker-src blob:">
@@ -179,8 +179,12 @@
     const m = matrices[rot];
     if (!m) return false;
 
-    const op = PDFOperator.of('cm', m.map(v => PDFNumber.of(v)));
-    page.node.wrapContentStream(op);
+    const cmOp  = PDFOperator.of('cm', m.map(v => PDFNumber.of(v)));
+    page.node.normalize();
+    const startRef = page.doc.context.register(page.createContentStream(PDFLib.pushGraphicsState(), cmOp));
+    const endRef   = page.doc.context.register(page.createContentStream(PDFLib.popGraphicsState()));
+    page.node.wrapContentStreams(startRef, endRef);
+
     page.setRotation(degrees(0));
 
     // For 90/270 the visual dimensions are swapped — update MediaBox accordingly
@@ -225,6 +229,10 @@
       const rotations = [];
 
       for (const page of pages) {
+        // ── Step 0: rotate landscape pages to portrait ──────────────
+        const { width: pw, height: ph } = page.getSize();
+        if (pw > ph) page.setRotation(PDFLib.degrees(270));
+
         // Step 1: bake /Rotate into content stream
         const rotFixed = normalizeRotation(page);
         if (rotFixed) rotations.push(rotFixed);
