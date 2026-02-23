@@ -4,10 +4,11 @@ PDF przesyłany w PUH wymaga pustych marginesów 1.5 cm. Zeskanowane pliki nie s
 
 Narzędzie działa w przeglądarce. **Plik nie jest wysyłany na żaden serwer**.
 
-Operacje: 
-1) normalizacja obrotu
-2) skalowanie × 0.8571
-3) Dopasowanie A4
-4) MediaBox = TrimBox = \[0 0 595 841\]. 
+Operacje:
+1) obracanie do pionu ewentualnego poziomego pliku
+2) normalizacja obrotu
+3) skalowanie × 0.8571
+4) Dopasowanie A4
+5) MediaBox = TrimBox = \[0 0 595 841\]. 
 
 Narzędzie korzysta z otwartoźródłowej biblioteki [https://pdf-lib.js.org].
