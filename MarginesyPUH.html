@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none';
+           script-src 'sha256-UF92WaavhqXFAfH7Nz1mJTw4HJx+PeCtfBSoBVuBPcE=' https://unpkg.com;
+           style-src 'unsafe-inline';
+           connect-src https://unpkg.com;  
+           worker-src blob:">
   <title>Dodawanie marginesów do PDF</title>
   <style>
     :root {
@@ -57,7 +63,9 @@
       h1 { font-size: 1.1rem; }
     }
   </style>
-  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"
+          integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI"
+          crossorigin="anonymous"></script>
 </head>
 <body>
 <div class="wrap">
@@ -82,7 +90,7 @@
     </div>
     <div class="footer">
       Operacja: normalizacja obrotu → skalowanie ×&nbsp;0.8571 → fit A4 → MediaBox = TrimBox = [0 0 595 841].
-      Oparty na <a href="https://pdf-lib.js.org" target="_blank">pdf-lib</a>.
+      Oparty na <a href="https://pdf-lib.js.org" target="_blank" rel="noopener noreferrer">pdf-lib</a>.
     </div>
   </div>
 </div>
@@ -101,8 +109,9 @@
 
   function escapeHtml(s) {
     return String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
   }
 
   function setStatus(msg, type = '') {
@@ -125,7 +134,7 @@
     const { blob, filename, pages, size, rotFixed } = state.result;
     const pageLabel  = pages === 1 ? '1 strona' : `${pages} stron`;
     const marginMM   = (A4_W * (1 - SCALE) / 2 / (72 / 25.4)).toFixed(1);
-    const rotNote    = rotFixed ? `<div class="small">obrót znormalizowany: ${rotFixed}</div>` : '';
+    const rotNote    = rotFixed ? `<div class="small">obrót znormalizowany: ${escapeHtml(String(rotFixed))}</div>` : '';
 
     resultsEl.hidden  = false;
     resultsEl.innerHTML = `
