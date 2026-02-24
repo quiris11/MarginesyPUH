@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none';
-           script-src 'sha256-Q3lN6uoooBhpmLgwnLPDbJbw+3euHVhPS0BMfGW5ZBY=' https://unpkg.com;
-           style-src 'unsafe-inline';
+           script-src 'sha256-XkCDm2s1K8mtKEKgWhjFf+ou29zGSodmt8MiiETnKLU=' https://unpkg.com;
+           style-src 'sha256-DdAOjUtVEDCjkkOA+Emgcc/+vGyZqbkrLySiuvuekIg=';
            connect-src https://unpkg.com;  
            worker-src blob:">
   <title>Dodawanie marginesów do PDF</title>
@@ -75,7 +75,7 @@
       <p class="sub">Narzędzie działa w przeglądarce — plik nie jest wysyłany na serwer.</p>
     </div>
     <div class="body">
-      <p style="margin:0;font-size:.95rem;">
+      <p class="sub">
         PDF przesyłany w PUH wymaga pustych marginesów 1.5&nbsp;cm.
         Zeskanowane pliki nie spełniają tego warunku i są odrzucane.
         Narzędzie normalizuje orientację, boxy strony i dodaje marginesy.
@@ -225,6 +225,29 @@
       const file   = fileInput.files[0];
       const bytes  = await file.arrayBuffer();
       const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+
+      // ── Strip digital signatures ──────────────────────────────
+      const { PDFName, PDFArray } = PDFLib;
+      const acroForm = pdfDoc.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFLib.PDFDict);
+      if (acroForm) {
+        acroForm.delete(PDFName.of('SigFlags'));
+        const fields = acroForm.lookupMaybe(PDFName.of('Fields'), PDFArray);
+        if (fields) {
+          const nonSigRefs = [];
+          for (let i = 0; i < fields.size(); i++) {
+            const ref   = fields.get(i);
+            const field = pdfDoc.context.lookupMaybe(ref, PDFLib.PDFDict);
+            const ft    = field?.lookupMaybe(PDFName.of('FT'), PDFLib.PDFName);
+            if (ft?.asString() !== '/Sig') nonSigRefs.push(ref);
+          }
+          const newFields = PDFArray.withContext(pdfDoc.context);
+          nonSigRefs.forEach(ref => newFields.push(ref));
+          acroForm.set(PDFName.of('Fields'), newFields);
+        }
+      }
+      pdfDoc.catalog.delete(PDFName.of('Perms'));
+      // ──────────────────────────────────────────────────────────
+
       const pages  = pdfDoc.getPages();
       const rotations = [];
 
