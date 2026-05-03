@@ -1,6 +1,6 @@
 # Dodawanie marginesów do zeskanowanego pliku PDF
 
-PDF przesyłany w PUH wymaga pustych marginesów 1.5 cm. Zeskanowane pliki nie spełniają tego warunku i są odrzucane. Narzędzie normalizuje orientację, boxy strony i dodaje marginesy.
+PDF przesyłany PUH-em wymaga pustych marginesów 1.5 cm. Zeskanowane pliki nie spełniają tego warunku i są odrzucane. Narzędzie normalizuje orientację, boxy strony i dodaje marginesy.
 
 Narzędzie działa w przeglądarce. **Plik nie jest wysyłany na żaden serwer**.
 
