@@ -11,6 +11,6 @@ Operacje:
 4) Dopasowanie A4
 5) MediaBox = TrimBox = \[0 0 595 841\].
 
-Wynika pracy można zapisać pobrać na dysk. Oryginalny plik pozostaje nienaruszony.
+Wynik pracy można zapisać pobrać na dysk. Oryginalny plik pozostaje nienaruszony.
 
 Narzędzie korzysta z otwartoźródłowej biblioteki [https://pdf-lib.js.org].
